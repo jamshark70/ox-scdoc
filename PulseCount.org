@@ -1,0 +1,158 @@
+#+title: PulseCount
+#+summary: Pulse counter.
+#+related: Classes/Stepper
+#+categories: UGens>Triggers
+
+
+* Description
+
+Each trigger /increments/ a *counter* which is output as a signal =monospace=.
+
+- List item
+  1. Numbered list
+  2. Another numbered item
+- List item B
+
+And a definition list:
+
+- Brillig :: Some fictional evening.
+
+And tables:
+
+| *Rate*  | *Meaning*                   |
+|---------+-----------------------------|
+| Audio   | One value per output sample |
+| Control | One value per control block |
+
+* Classmethods
+
+** ar, kr
+*** trig
+
+Trigger. Trigger can be any signal. A trigger happens when the
+signal changes from non-positive to positive.
+
+*** reset
+
+Resets the counter to zero when triggered.
+
+
+* Examples
+
+#+BEGIN_SRC
+SynthDef("help-PulseCount",{ arg out=0;
+	Out.ar(out,
+		SinOsc.ar(
+			PulseCount.ar(Impulse.ar(10), Impulse.ar(0.4)) * 200,
+			0, 0.05
+		)
+	)
+}).play;
+#+END_SRC
+
+* Questions							   :noexport:
+** Headline cases
+   - Level 1: Section, or special section
+   - Level 2
+     - If parent is =classmethods= or =instancemethods=, assume method
+     - Else =subsection=
+   - Level 3
+     - If parent is =method=:
+       - Keep =returns= and =discussion= as is
+       - Else, assume =arg=
+     - Else if parent is =classmethods= or =instancemethods=, use =subsection=
+     - Else boldface
+   - Level 4
+     - If parent is =method=:
+       - Keep =returns= and =discussion= as is
+       - Else, assume =arg=
+     - Else boldface
+*** Predicates
+    Use =org-export-get-parent=
+    - org-scdoc-headline-is-method-section-p: title is class or instance methods
+    - org-scdoc-headline-is-method-p:
+      - title is not =returns= or =discussion=
+      - org-scdoc-headline-is-method-section-p on grandparent
+** Is the =arg= tag superfluous?
+   Perhaps untagged headers, except =Returns= and =Discussion=, should
+   be assumed to be arguments, if they are children of a heading
+   tagged =method=. \\
+   If you happen to have an argument named, e.g., =returns=, you could
+   force it to be an argument by tagging it.
+** Email to org, not sent
+Suggestions for org representation for a new exporter
+
+I'm considering hacking up a new exporter, mainly for my own use, to
+produce SCDoc (SuperCollider documentation) files. (My rationale is
+that I have bunches of undocumented code, and one reason that I
+haven't documented it is that I don't really like writing SCDoc
+directly... but I'm very fond of org markup. So, maybe if I could
+write in a format that I like and export to SCDoc, I'd actually get
+caught up.)
+
+The structure of SCDoc is relatively flat: sections, subsections and,
+at level 3, "method tags." But there are different types of sections:
+regular section, description, class methods, instance methods and
+examples. Method tags subdivide into method, private and copymethod,
+and inside these, you can have arguments, returns and discussion
+tags. This is orthogonal to org's outline structure.
+
+My question: Is it better to use properties or tags to differentiate
+these?
+
+I'm leaning towards tags because properties are hidden by default,
+meaning you would have to do extra work to find out what kind of thing
+this headline represents.
+
+http://doc.sccode.org/Reference/SCDocSyntax.html
+** Email to org, not sent (syntax fail)
+org-export-get-parent problem
+
+In this SCDoc export backend but I'm working on, there is some intricate logic for headlines, and something isn't working as I would have expected.
+
+In SCDoc, certain special tags must be nested: 'argument::', 'returns::' and 'discussion::' may appear only within a 'method::' tag. Typically, 'method::' tags appear inside top-level sections identified as either 'classmethods::' or 'instancemethods::'. I wanted to take advantage of the rule and convention to identify methods and arguments automatically -- in org:
+
+- A headline is a "method section" if its title is'classmethods' or 'instancemethods'.
+(defun org-scdoc-headline-is-method-section-p (headline info)
+  "Is this headline either CLASSMETHODS or INSTANCEMETHODS?"
+  (let* ((title (org-export-data (org-element-property :title headline) info))
+	 (allcaps (upcase title)))
+    (member allcaps '("CLASSMETHODS" "INSTANCEMETHODS"))))
+
+- A headline is a "method" if it has a tag 'method', or if its parent headline is a method section.
+(defun org-scdoc-headline-is-method-p (headline info)
+  "Is this headline a METHOD tag?"
+  (let ((tags (org-export-get-tags headline info)))
+    (or (member "METHOD" (mapcar 'upcase tags))
+	(let (parent (org-export-get-parent headline))
+	  (and parent (org-scdoc-headline-is-method-section-p parent info))))))
+
+- A headline is an "argument" if it has a tag 'arg', or if it's neither 'returns' nor 'discussion' and its parent is a method.
+(defun org-scdoc-headline-is-argument-p (headline info)
+  "Is HEADLINE (an element) an argument name or a special headline?"
+  (let* ((title (org-export-data (org-element-property :title headline) info))
+	 (allcaps (upcase title))
+	 (tags (org-export-get-tags headline info)))
+    (or (member "ARG" (mapcar 'upcase tags))
+	(and (not (member allcaps '("RETURNS" "DISCUSSION")))
+	     (let ((parent (org-export-get-parent headline)))
+	       (and parent (org-scdoc-headline-is-method-p parent info)))))))
+
+Consider my test case:
+
+#+BEGIN_SRC org
+  ,* Classmethods
+  ,** ar, kr
+  ,*** trig
+#+END_SRC
+
+The first two headings are handled correctly. The third is not identified as an "argument," but it should be.
+
+I instrumented the above three functions, plus org-scdoc-headline, and found that this is what's happening:
+
+1. org-scdoc-headline-is-argument-p: No tags, so the tag check is nil. The title, 'trig', isn't one of the reserved titles, so we fall through to the parent check.
+
+2. org-scdoc-headline-is-method-p: No tags, so check the parent. Here, org-export-get-parent returns nil, so it assumes that this headline ('ar, kr') is not a method.
+
+"... org-export-get-parent returns nil"... this is confusing to me, because I can confirm (using extra debugging "message" calls, not shown above) that -is-method-p is being called on 'ar, kr', which is a second-level heading and most definitely has a parent.
+
