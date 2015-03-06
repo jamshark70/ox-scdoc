@@ -1,4 +1,6 @@
-
+;;; ox-scdoc.el
+;;; Org-mode exporter for SCDoc
+;;; H. James Harkins: CC-BY-SA
 
 (org-export-define-derived-backend 'scdoc 'ascii
   :translate-alist
