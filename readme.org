@@ -1,0 +1,8 @@
+* OX-SCDOC
+
+When complete, this will be an export backend for org-mode, producing
+SCDoc help files.
+
+Not all features are implemented yet!
+
+Usage instructions to come later.
